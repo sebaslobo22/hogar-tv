@@ -88,7 +88,11 @@ object HomeKit {
             advertiser.onStateChanged = { publishStatus() }
             advertiser.start(port, txtRecord(store, tvRef.get()))
             registerReceivers(runtime)
+            registerSettingsListeners(runtime)
             TvPower.onForegroundChanged = { scheduleRefresh(null, 150) }
+            TvPower.onNightLightChanged = { scheduleRefresh(null, 200) }
+            TvPower.buttonListener = { id, press -> fireButton(id, press) }
+            TvPower.buttonWanted = { id -> Button.byId(id)?.let { b -> runtime.server.isSubscribed(b.eventIid) } == true }
             exec.execute { tvRef.get().refresh() }  // primera foto, para detectar cambios después
             publishStatus(port)
             Log.i(TAG, "HomeKit listo en el puerto $port (c#=${tvRef.get().let { store.configNumber(it.db.signature()) }})")
@@ -139,6 +143,11 @@ object HomeKit {
     /** Relee el estado en el hilo de eventos y avisa de lo que cambió a los suscritos (salvo [except]). */
     private fun scheduleRefresh(except: Conn?, delayMs: Long = 250) {
         val r = rt ?: return
+        // Tras una orden, se vuelve a mirar cuando expira el valor optimista por si la acción no ocurrió
+        // (antes de la comprobación de abajo: otro refresco ya pendiente no debe saltarse este).
+        if (except != null) {
+            r.exec.schedule({ scheduleRefresh(null, 0) }, TvController.HOLD_MS + 300, TimeUnit.MILLISECONDS)
+        }
         if (!pendingRefresh.compareAndSet(false, true)) return
         r.exec.schedule({
             pendingRefresh.set(false)
@@ -150,10 +159,6 @@ object HomeKit {
                 Log.w(TAG, "refresco: ${t.message}")
             }
         }, delayMs, TimeUnit.MILLISECONDS)
-        // Tras una orden, se vuelve a mirar cuando expira el valor optimista por si la acción no ocurrió.
-        if (except != null) {
-            r.exec.schedule({ scheduleRefresh(null, 0) }, TvController.HOLD_MS + 300, TimeUnit.MILLISECONDS)
-        }
     }
 
     private fun registerReceivers(r: Runtime) {
@@ -171,6 +176,35 @@ object HomeKit {
         register(app, packages, IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED); addAction(Intent.ACTION_PACKAGE_REMOVED); addDataScheme("package")
         })
+    }
+
+    // SharedPreferences solo guarda una referencia débil de los oyentes: se conservan aquí.
+    private val settingsListeners = ArrayList<SharedPreferences.OnSharedPreferenceChangeListener>()
+
+    /** Luz nocturna, luz musical y salvapantallas se cambian también desde Hogar: se avisa a Casa de cada cambio. */
+    private fun registerSettingsListeners(r: Runtime) {
+        for (file in listOf(AndroidTvBackend.NIGHT_FILE, AndroidTvBackend.LIGHT_FILE, AndroidTvBackend.PLAYING_FILE)) {
+            runCatching {
+                val sp = r.app.getSharedPreferences(file, Context.MODE_PRIVATE)
+                val l = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> scheduleRefresh(null, 250) }
+                settingsListeners += l
+                sp.registerOnSharedPreferenceChangeListener(l)
+            }
+        }
+    }
+
+    /** Pulsación de un botón del mando (simple 0, doble 1, larga 2): evento a los controladores suscritos. */
+    private fun fireButton(id: String, press: Int) {
+        val r = rt ?: return
+        val b = Button.byId(id) ?: return
+        r.exec.execute {
+            try {
+                Log.i("HogarHK", "botón $id pulsación=$press")
+                r.server.notifyChanged(listOf(b.eventIid), { press }, null)
+            } catch (t: Throwable) {
+                Log.w(TAG, "botón: ${t.message}")
+            }
+        }
     }
 
     private fun register(app: Application, r: BroadcastReceiver, f: IntentFilter) {

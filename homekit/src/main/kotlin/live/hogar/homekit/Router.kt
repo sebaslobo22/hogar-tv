@@ -64,7 +64,10 @@ internal class HapRouter(
                 !def.readable -> HapStatus.WRITE_ONLY
                 else -> HapStatus.OK
             }
-            if (status == HapStatus.OK) {
+            if (status == HapStatus.OK && def!!.eventOnly) {
+                m["value"] = null   // ProgrammableSwitchEvent: se lee como null, solo existe como evento
+                if (req.query["ev"] == "1") m["ev"] = iid in conn.subscriptions
+            } else if (status == HapStatus.OK) {
                 val v = controller.read(iid)
                 if (v == null) { m["status"] = HapStatus.COMMUNICATION_FAILURE; anyError = true } else m["value"] = v
                 if (req.query["ev"] == "1" && def!!.notifies) m["ev"] = iid in conn.subscriptions

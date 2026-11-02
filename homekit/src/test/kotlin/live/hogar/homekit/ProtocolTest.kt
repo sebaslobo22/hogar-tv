@@ -211,7 +211,8 @@ class RouterTest {
         assertEquals(1L, acc["aid"])
         @Suppress("UNCHECKED_CAST")
         val services = acc["services"] as List<Map<String, Any?>>
-        assertEquals(listOf("3E", "A2", "D8", "D9", "D9", "D9", "D9", "113"), services.map { it["type"] })
+        assertEquals(listOf("3E", "A2", "D8", "D9", "D9", "D9", "D9", "113"), services.take(8).map { it["type"] })   // lo anterior, intacto
+        assertEquals(listOf("43", "49", "49", "49", "49", "CC", "89", "89", "89"), services.drop(8).map { it["type"] })   // lo añadido va después
         val tv = services.first { it["type"] == "D8" }
         assertEquals(true, tv["primary"])
         assertEquals(listOf(110L, 120L, 130L, 140L, 20L), tv["linked"])

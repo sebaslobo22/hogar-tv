@@ -65,6 +65,8 @@ internal class NightLightController(private val service: AccessibilityService) {
         val preview = now < previewUntil
         val visible = FadeMath.shouldShow(ev.active || preview, cfg.intensity, cfg.dim)
         val fade = if (preview && !ev.active) FadeMath.PREVIEW_FADE_MS else FadeMath.FADE_MS
+        // Para HomeKit: ¿el filtro está puesto por horario/modo? (sin contar la vista previa)
+        live.hogar.core.TvPower.reportNightLight(FadeMath.shouldShow(ev.active, cfg.intensity, cfg.dim))
         overlay.setTarget(visible, NightColor.argb(cfg.intensity, cfg.dim), fade)
 
         var wait = SAFETY_MS

@@ -69,6 +69,10 @@ internal object Http {
         return sb.toString().toByteArray(Charsets.ISO_8859_1) + r.body
     }
 
+    /** Cuerpo JSON de un evento con los valores dados: {"characteristics":[{"aid":1,"iid":N,"value":V},...]}. */
+    fun eventJson(values: List<Pair<Int, Any>>): String =
+        Json.write(mapOf("characteristics" to values.map { (iid, v) -> linkedMapOf("aid" to Iid.AID, "iid" to iid, "value" to v) }))
+
     fun event(json: String): ByteArray {
         val body = json.toByteArray(Charsets.UTF_8)
         return ("EVENT/1.0 200 OK\r\nContent-Type: ${HttpResp.JSON}\r\nContent-Length: ${body.size}\r\n\r\n")
@@ -89,6 +93,9 @@ internal class HapServer(
     private val conns = ConcurrentHashMap<Conn, Socket>()
 
     val connectionCount: Int get() = conns.size
+
+    /** ¿Algún controlador verificado espera eventos de esta característica? */
+    fun isSubscribed(iid: Int): Boolean = conns.keys.any { it.verified && iid in it.subscriptions }
 
     /** Abre el puerto (libre, elegido por el sistema) y devuelve cuál es. */
     @Synchronized
@@ -191,11 +198,9 @@ internal class HapServer(
             if (conn === except) continue
             val hit = iids.filter { it in conn.subscriptions }
             if (hit.isEmpty()) continue
-            val list = hit.mapNotNull { iid ->
-                valueOf(iid)?.let { linkedMapOf("aid" to Iid.AID, "iid" to iid, "value" to it) }
-            }
+            val list = hit.mapNotNull { iid -> valueOf(iid)?.let { iid to it } }
             if (list.isEmpty()) continue
-            val msg = Http.event(Json.write(mapOf("characteristics" to list)))
+            val msg = Http.event(Http.eventJson(list))
             try {
                 synchronized(conn.outLock) {
                     val s = conn.session ?: return@synchronized

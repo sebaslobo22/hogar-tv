@@ -60,9 +60,61 @@ internal object Iid {
     fun inputService(identifier: Int) = 100 + 10 * identifier
     fun inputChar(identifier: Int, which: Int) = inputService(identifier) + which
 
+    /** Mayor identificador de entrada posible: sus iid (100 + 10n) tienen que quedar por debajo de los servicios añadidos. */
+    const val MAX_INPUT_IDENTIFIER = 989
+
     /** Identificador de entrada al que pertenece un iid, o null. */
-    fun inputOf(iid: Int): Int? = if (iid >= 110) (iid - 100) / 10 else null
+    fun inputOf(iid: Int): Int? = if (iid in 110 until Extra.FIRST_IID) (iid - 100) / 10 else null
     fun inputPart(iid: Int): Int = (iid - 100) % 10
+
+    // Servicios añadidos (iid nuevos, a partir de 10000; los anteriores no se tocan).
+    const val LABEL = 10500
+    const val LABEL_NAMESPACE = 10501
+}
+
+/** Servicios Luz nocturna (bombilla) e interruptores. Cada uno: servicio = base, nombre +1, On +2, brillo +3, nombre configurado +4. */
+internal enum class Extra(val base: Int, val label: String, val slot: String) {
+    NIGHT(10000, "Luz nocturna", "night"),
+    MUSIC(10100, "Luz musical", "music"),
+    RHYTHM(10200, "Ritmo", "rhythm"),
+    NOW_PLAYING(10300, "Reproduciendo ahora", "nowplaying"),
+    SAVER(10400, "Salvapantallas", "saver");
+
+    val serviceIid get() = base
+    val nameIid get() = base + 1
+    val onIid get() = base + 2
+    val brightnessIid get() = base + 3
+    val configuredIid get() = base + 4
+
+    companion object {
+        const val FIRST_IID = 10000
+        fun ofOn(iid: Int): Extra? = entries.firstOrNull { it.onIid == iid }
+        fun ofConfiguredName(iid: Int): Extra? = entries.firstOrNull { it.configuredIid == iid }
+    }
+}
+
+/** Botones del mando como interruptores programables sin estado. Servicio = base, evento +1, nombre +2, índice +3. */
+internal enum class Button(val base: Int, val id: String, val label: String, val index: Int, val valid: List<Int>) {
+    BLUE(10510, TvPowerIds.BLUE, "Botón azul", 1, listOf(0, 1, 2)),
+    PROFILE(10520, TvPowerIds.PROFILE, "Botón perfil", 2, listOf(1, 2)),
+    TV(10530, TvPowerIds.TV, "Botón TV", 3, listOf(2));
+
+    val serviceIid get() = base
+    val eventIid get() = base + 1
+    val nameIid get() = base + 2
+    val indexIid get() = base + 3
+
+    companion object {
+        fun byId(id: String): Button? = entries.firstOrNull { it.id == id }
+        fun byEvent(iid: Int): Button? = entries.firstOrNull { it.eventIid == iid }
+    }
+}
+
+/** Espejo de las constantes de live.hogar.core.TvPower (así las enumeraciones no dependen de Android ni de core en las pruebas). */
+internal object TvPowerIds {
+    const val BLUE = "blue"
+    const val PROFILE = "profile"
+    const val TV = "tv"
 }
 
 /** Una entrada del televisor (app o HDMI). */
@@ -84,6 +136,8 @@ internal class CharDef(
     val step: Int? = null,
     val maxLen: Int? = null,
     val validValues: List<Int>? = null,
+    /** Solo emite eventos (ProgrammableSwitchEvent): al leerla, el valor es null. */
+    val eventOnly: Boolean = false,
 ) {
     val readable get() = "pr" in perms
     val writable get() = "pw" in perms
@@ -96,7 +150,7 @@ internal class CharDef(
             is Number -> when (v.toInt()) { 0 -> false; 1 -> true; else -> null }
             else -> null
         }
-        "uint8", "uint16", "uint32" -> {
+        "int", "uint8", "uint16", "uint32" -> {
             val n: Long? = when (v) {
                 is Boolean -> if (v) 1L else 0L
                 is Number -> if (v.toDouble() == Math.floor(v.toDouble())) v.toLong() else null
@@ -124,7 +178,7 @@ internal class ServiceDef(
     val linked: List<Int> = emptyList(),
 )
 
-/** Base de accesorios (aid 1): Información, Protocolo, Televisión + entradas + altavoz. */
+/** Base de accesorios (aid 1): Información, Protocolo, Televisión + entradas + altavoz + luz nocturna, interruptores y botones. */
 internal class AccessoryDb(val inputs: List<InputDef>) {
     val services: List<ServiceDef>
     private val byIid = HashMap<Int, CharDef>()
@@ -182,6 +236,29 @@ internal class AccessoryDb(val inputs: List<InputDef>) {
                 CharDef(Iid.SPK_VOLUME, "119", "uint8", listOf("pr", "pw", "ev"), unit = "percentage", min = 0, max = 100, step = 1),
             ),
         )
+        // Añadidos después de todo lo anterior: los iid existentes no cambian.
+        val boolPerms = listOf("pr", "pw", "ev")
+        for (e in Extra.entries) {
+            val chars = ArrayList<CharDef>()
+            chars += CharDef(e.nameIid, "23", "string", listOf("pr"))
+            chars += CharDef(e.onIid, "25", "bool", boolPerms)
+            if (e == Extra.NIGHT) {
+                chars += CharDef(e.brightnessIid, "8", "int", boolPerms, unit = "percentage", min = 1, max = 100, step = 1)
+            }
+            chars += CharDef(e.configuredIid, "E3", "string", boolPerms)
+            list += ServiceDef(e.serviceIid, if (e == Extra.NIGHT) "43" else "49", chars)
+        }
+        list += ServiceDef(Iid.LABEL, "CC", listOf(CharDef(Iid.LABEL_NAMESPACE, "CD", "uint8", listOf("pr"), min = 0, max = 1, step = 1)))
+        for (b in Button.entries) {
+            list += ServiceDef(
+                b.serviceIid, "89",
+                listOf(
+                    CharDef(b.eventIid, "73", "uint8", listOf("pr", "ev"), min = 0, max = 2, step = 1, validValues = b.valid, eventOnly = true),
+                    CharDef(b.nameIid, "23", "string", listOf("pr")),
+                    CharDef(b.indexIid, "CB", "uint8", listOf("pr"), min = 1, max = 255, step = 1),
+                ),
+            )
+        }
         services = list
         for (s in list) for (c in s.chars) byIid[c.iid] = c
     }
@@ -189,7 +266,7 @@ internal class AccessoryDb(val inputs: List<InputDef>) {
     fun char(iid: Int): CharDef? = byIid[iid]
 
     /** Firma estable del contenido (identificadores y nombres) para decidir cuándo sube c#. */
-    fun signature(): String = "v1|" + inputs.joinToString(",") { "${it.identifier}:${it.type}:${it.name}" }
+    fun signature(): String = "v2|" + inputs.joinToString(",") { "${it.identifier}:${it.type}:${it.name}" }
 
     /** JSON de GET /accessories. [valueOf] da el valor actual de cada característica legible. */
     fun accessoriesJson(valueOf: (Int) -> Any?): String {
@@ -212,7 +289,8 @@ internal class AccessoryDb(val inputs: List<InputDef>) {
         m["type"] = c.type
         m["perms"] = c.perms
         m["format"] = c.format
-        if (c.readable) valueOf(c.iid)?.let { m["value"] = it }
+        if (c.eventOnly) m["value"] = null
+        else if (c.readable) valueOf(c.iid)?.let { m["value"] = it }
         c.unit?.let { m["unit"] = it }
         c.min?.let { m["minValue"] = it }
         c.max?.let { m["maxValue"] = it }
@@ -223,6 +301,22 @@ internal class AccessoryDb(val inputs: List<InputDef>) {
     }
 
     companion object {
+        /** Identificadores de un TLV8 de DisplayOrder (base64); null si no es válido. */
+        fun parseDisplayOrder(b64: String): List<Int>? = try {
+            val bytes = Base64.getDecoder().decode(b64)
+            Tlv8.readList(bytes).filter { it.first == 0x01 }.map { (_, v) ->
+                if (v.size != 4) return null
+                (v[0].toInt() and 0xFF) or ((v[1].toInt() and 0xFF) shl 8) or ((v[2].toInt() and 0xFF) shl 16) or ((v[3].toInt() and 0xFF) shl 24)
+            }
+        } catch (e: IllegalArgumentException) { null }
+
+        /** Orden guardado aplicado a las entradas existentes; las que falten van al final en su orden natural. */
+        fun applyOrder(saved: List<Int>, current: List<Int>): List<Int> {
+            val present = current.toSet()
+            val head = saved.filter { it in present }.distinct()
+            return head + current.filter { it !in head }
+        }
+
         /** TLV8 de DisplayOrder (en base64): cada identificador como uint32 LE, separados por 0x00. */
         fun displayOrder(ids: List<Int>): String {
             val items = ArrayList<Pair<Int, ByteArray>>()

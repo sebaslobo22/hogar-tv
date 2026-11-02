@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import live.hogar.core.TvPower
 
@@ -63,15 +64,68 @@ internal class AndroidTvBackend(private val ctx: Context) : TvBackend {
                 audio.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, a.keyCode, 0))
             }.isSuccess
         }
-        // Flechas y Aceptar: solo cuando el modo puntero de Hogar está activo.
-        is RemoteKeys.Action.Pointer -> TvPower.pointerKey?.invoke(a.keyCode) ?: false
-        RemoteKeys.Action.Back -> TvPower.backer?.invoke() ?: false
-        RemoteKeys.Action.Home -> TvPower.homer?.invoke() ?: false
-        RemoteKeys.Action.Info -> start(
-            Intent().setClassName(ctx.packageName, "live.hogar.nowplaying.NowPlayingActivity")
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        )
+        // Flechas y Aceptar: puntero si está activo; si no, foco por accesibilidad (lo decide el servicio).
+        is RemoteKeys.Action.Dpad -> (TvPower.dpadKey?.invoke(a.keyCode) ?: TvPower.pointerKey?.invoke(a.keyCode) ?: false).also {
+            Log.d(TAG, "mando tecla=${a.keyCode} aceptada=$it")
+        }
+        RemoteKeys.Action.Back -> (TvPower.backer?.invoke() ?: false).also { Log.d(TAG, "mando atrás=$it") }
+        RemoteKeys.Action.Home -> (TvPower.homer?.invoke() ?: false).also { Log.d(TAG, "mando inicio=$it") }
+        RemoteKeys.Action.Info -> openNowPlaying().also { Log.d(TAG, "mando info=$it") }
         RemoteKeys.Action.None -> false
+    }
+
+    private fun openNowPlaying(): Boolean = start(
+        Intent().setClassName(ctx.packageName, NOW_PLAYING_ACTIVITY)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+    )
+
+    // ---------------------------------------------------------------- luz nocturna (SharedPreferences "nightlight")
+
+    private val night get() = ctx.applicationContext.getSharedPreferences(NIGHT_FILE, Context.MODE_PRIVATE)
+    private val lightSp get() = ctx.applicationContext.getSharedPreferences(LIGHT_FILE, Context.MODE_PRIVATE)
+    private val playingSp get() = ctx.applicationContext.getSharedPreferences(PLAYING_FILE, Context.MODE_PRIVATE)
+
+    override fun nightLightOn(): Boolean =
+        Mappings.nightOn(night.getString("mode", null), TvPower.nightLightActive)
+
+    /** Encender = "Siempre encendido"; apagar = "Apagado". El último modo con horario se conserva para el interruptor del Centro de control. */
+    override fun setNightLightOn(on: Boolean) {
+        night.edit().putString("mode", if (on) Mappings.NIGHT_ALWAYS else Mappings.NIGHT_OFF).apply()
+        Log.i(TAG, "luz nocturna=${if (on) "encendida" else "apagada"}")
+    }
+
+    override fun nightLightIntensity(): Int = night.getInt("intensity", 50)
+
+    override fun setNightLightIntensity(v: Int) {
+        night.edit().putInt("intensity", v.coerceIn(0, 100)).apply()
+        Log.i(TAG, "luz nocturna intensidad=$v")
+    }
+
+    // ---------------------------------------------------------------- luz musical (SharedPreferences "nowplaying_light")
+
+    override fun lightMode(): Int = lightSp.getInt("mode", 0).coerceIn(0, 2)
+
+    override fun setLightMode(mode: Int) {
+        lightSp.edit().putInt("mode", mode.coerceIn(0, 2)).apply()
+        Log.i(TAG, "luz musical modo=$mode")
+    }
+
+    // ---------------------------------------------------------------- Reproduciendo ahora y salvapantallas
+
+    override fun nowPlayingOpen(): Boolean =
+        TvPower.foreground == ctx.packageName && TvPower.foregroundClass == NOW_PLAYING_ACTIVITY
+
+    override fun setNowPlayingOpen(open: Boolean) {
+        if (open) { openNowPlaying() }
+        else if (nowPlayingOpen()) { TvPower.homer?.invoke() }
+        Log.i(TAG, "reproduciendo ahora=$open")
+    }
+
+    override fun screensaverOn(): Boolean = Mappings.saverOn(playingSp.getInt("auto", 0))
+
+    override fun setScreensaverOn(on: Boolean) {
+        playingSp.edit().putInt("auto", Mappings.afterSaver(playingSp.getInt("auto", 0), on)).apply()
+        Log.i(TAG, "salvapantallas=$on")
     }
 
     private val stream = AudioManager.STREAM_MUSIC
@@ -104,12 +158,19 @@ internal class AndroidTvBackend(private val ctx: Context) : TvBackend {
 
     companion object {
         const val HDMI_PREFIX = "hdmi:"
+        const val TAG = "HogarHK"
+        const val NOW_PLAYING_ACTIVITY = "live.hogar.nowplaying.NowPlayingActivity"
+        // Mismos archivos que usan el lanzador (NightLightStore), nowplaying (LightPrefs, NowPlayingPrefs).
+        const val NIGHT_FILE = "nightlight"
+        const val LIGHT_FILE = "nowplaying_light"
+        const val PLAYING_FILE = "nowplaying"
     }
 }
 
 /** Entradas que se ofrecen en Casa: apps con icono de TV (las conocidas primero) y una HDMI. */
 internal object InputScanner {
-    private const val MAX_INPUTS = 15
+    private const val MAX_INPUTS = 30
+    private const val MAX_HDMI = 3
 
     // Orden de preferencia de las apps conocidas; el valor es el nombre que se muestra.
     private val KNOWN = linkedMapOf(
@@ -133,6 +194,8 @@ internal object InputScanner {
         "com.google.android.apps.tv.setup", "com.android.vending", "com.google.android.packageinstaller",
     )
 
+    private const val OWN_PACKAGE = "live.hogar"
+
     fun scan(ctx: Context, store: HomeKitStore): List<InputDef> {
         val out = ArrayList<InputDef>()
         val pm = ctx.packageManager
@@ -146,21 +209,28 @@ internal object InputScanner {
             if (pkg in labels) continue
             labels[pkg] = KNOWN[pkg] ?: runCatching { ri.loadLabel(pm).toString() }.getOrDefault(pkg).ifBlank { pkg }
         }
+        // Hogar siempre está, aunque el sistema no lo liste como app de TV.
+        if (OWN_PACKAGE !in labels) labels[OWN_PACKAGE] = "Hogar"
         val known = KNOWN.keys.filter { it in labels }.distinctBy { KNOWN[it] }
         val others = labels.keys.filter { it !in KNOWN }.sortedBy { labels[it]!!.lowercase() }
-        for (pkg in known + others) {
-            if (out.size >= MAX_INPUTS - 1) break
-            out += InputDef(store.identifierFor(pkg), pkg, labels[pkg]!!, InputDef.TYPE_APPLICATION)
-        }
-        // Una entrada HDMI (la primera que informe el sistema), para volver a una consola o decodificador.
+        // Entradas HDMI que informe el sistema (hasta MAX_HDMI), para volver a una consola o decodificador.
+        val hdmi = ArrayList<InputDef>()
         runCatching {
             val tv = ctx.getSystemService(Context.TV_INPUT_SERVICE) as TvInputManager
-            tv.tvInputList.filter { it.type == TvInputInfo.TYPE_HDMI }.take(1).forEach { info ->
+            tv.tvInputList.filter { it.type == TvInputInfo.TYPE_HDMI }.take(MAX_HDMI).forEach { info ->
                 val key = AndroidTvBackend.HDMI_PREFIX + info.id
                 val label = info.loadLabel(ctx)?.toString()?.ifBlank { null } ?: "HDMI"
-                out += InputDef(store.identifierFor(key), key, label, InputDef.TYPE_HDMI)
+                val id = store.identifierFor(key)
+                if (id <= Iid.MAX_INPUT_IDENTIFIER) hdmi += InputDef(id, key, label, InputDef.TYPE_HDMI)
             }
         }
+        for (pkg in known + others) {
+            if (out.size >= MAX_INPUTS - hdmi.size) break
+            val id = store.identifierFor(pkg)
+            if (id > Iid.MAX_INPUT_IDENTIFIER) continue // su iid chocaría con los servicios añadidos
+            out += InputDef(id, pkg, labels[pkg]!!, InputDef.TYPE_APPLICATION)
+        }
+        out += hdmi
         return out
     }
 }

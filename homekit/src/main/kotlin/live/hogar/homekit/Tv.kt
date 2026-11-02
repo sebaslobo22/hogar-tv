@@ -31,8 +31,8 @@ internal object RemoteKeys {
     sealed interface Action {
         /** Tecla multimedia que se entrega con AudioManager.dispatchMediaKeyEvent. */
         data class Media(val keyCode: Int) : Action
-        /** Flecha/Aceptar: solo funciona si el modo puntero de Hogar está activo. */
-        data class Pointer(val keyCode: Int) : Action
+        /** Flecha/Aceptar: mueve el puntero si está activo y, si no, el foco por accesibilidad (cualquier app). */
+        data class Dpad(val keyCode: Int) : Action
         data object Back : Action
         data object Home : Action
         data object Info : Action
@@ -44,11 +44,11 @@ internal object RemoteKeys {
         FAST_FORWARD -> Action.Media(KEYCODE_MEDIA_FAST_FORWARD)
         NEXT_TRACK -> Action.Media(KEYCODE_MEDIA_NEXT)
         PREVIOUS_TRACK -> Action.Media(KEYCODE_MEDIA_PREVIOUS)
-        ARROW_UP -> Action.Pointer(KEYCODE_DPAD_UP)
-        ARROW_DOWN -> Action.Pointer(KEYCODE_DPAD_DOWN)
-        ARROW_LEFT -> Action.Pointer(KEYCODE_DPAD_LEFT)
-        ARROW_RIGHT -> Action.Pointer(KEYCODE_DPAD_RIGHT)
-        SELECT -> Action.Pointer(KEYCODE_DPAD_CENTER)
+        ARROW_UP -> Action.Dpad(KEYCODE_DPAD_UP)
+        ARROW_DOWN -> Action.Dpad(KEYCODE_DPAD_DOWN)
+        ARROW_LEFT -> Action.Dpad(KEYCODE_DPAD_LEFT)
+        ARROW_RIGHT -> Action.Dpad(KEYCODE_DPAD_RIGHT)
+        SELECT -> Action.Dpad(KEYCODE_DPAD_CENTER)
         BACK -> Action.Back
         EXIT -> Action.Home
         PLAY_PAUSE -> Action.Media(KEYCODE_MEDIA_PLAY_PAUSE)
@@ -73,6 +73,58 @@ internal interface TvBackend {
     fun setMuted(muted: Boolean)
     fun volumeStep(up: Boolean)
     fun openSettings()
+
+    // ---- Luz nocturna, luz musical, Reproduciendo ahora y salvapantallas (valores por defecto: pruebas)
+    fun nightLightOn(): Boolean = false
+    fun setNightLightOn(on: Boolean) {}
+    /** 1..100. */
+    fun nightLightIntensity(): Int = 50
+    fun setNightLightIntensity(v: Int) {}
+    /** 0 = apagado, 1 = paleta, 2 = paleta + ritmo. */
+    fun lightMode(): Int = 0
+    fun setLightMode(mode: Int) {}
+    fun nowPlayingOpen(): Boolean = false
+    fun setNowPlayingOpen(open: Boolean) {}
+    fun screensaverOn(): Boolean = true
+    fun setScreensaverOn(on: Boolean) {}
+}
+
+/** Correspondencias puras entre los ajustes de Hogar y las características de HomeKit. */
+internal object Mappings {
+    // Luz nocturna: modos de NightMode.id en SharedPreferences "nightlight".
+    const val NIGHT_OFF = "off"
+    const val NIGHT_ALWAYS = "always"
+
+    /** On de la bombilla: siempre encendida es On; apagada, Off; con horario, lo que diga el filtro ahora mismo. */
+    fun nightOn(mode: String?, scheduleActive: Boolean?): Boolean = when (mode) {
+        null, NIGHT_OFF -> false
+        NIGHT_ALWAYS -> true
+        else -> scheduleActive == true
+    }
+
+    fun brightness(intensity: Int): Int = intensity.coerceIn(1, 100)
+
+    // Iluminación: LightPrefs.mode.
+    const val LIGHT_OFF = 0
+    const val LIGHT_PALETTE = 1
+    const val LIGHT_RHYTHM = 2
+
+    fun musicOn(mode: Int) = mode >= LIGHT_PALETTE
+    fun rhythmOn(mode: Int) = mode == LIGHT_RHYTHM
+
+    /** Luz musical: encender pasa a Paleta (si ya estaba con ritmo se queda); apagar apaga también el ritmo. */
+    fun afterMusic(mode: Int, on: Boolean): Int =
+        if (on) (if (mode == LIGHT_OFF) LIGHT_PALETTE else mode) else LIGHT_OFF
+
+    /** Ritmo: encender implica Luz musical; apagar deja la Paleta puesta. */
+    fun afterRhythm(mode: Int, on: Boolean): Int =
+        if (on) LIGHT_RHYTHM else (if (mode == LIGHT_RHYTHM) LIGHT_PALETTE else mode)
+
+    // Salvapantallas de música: NowPlayingPrefs.autoMode (0 = solo música, 1 = siempre, 2 = nunca).
+    const val SAVER_NEVER = 2
+
+    fun saverOn(setting: Int) = setting != SAVER_NEVER
+    fun afterSaver(setting: Int, on: Boolean): Int = if (on) (if (setting == SAVER_NEVER) 0 else setting) else SAVER_NEVER
 }
 
 /**
@@ -111,12 +163,34 @@ internal class TvController(
             Iid.TV_ACTIVE, Iid.SPK_ACTIVE -> if (backend.isAwake()) 1 else 0
             Iid.TV_ACTIVE_ID -> activeIdentifier()
             Iid.TV_SLEEP_DISCOVERY -> 1
-            Iid.TV_DISPLAY_ORDER -> AccessoryDb.displayOrder(db.inputs.map { it.identifier })
+            Iid.TV_DISPLAY_ORDER -> AccessoryDb.displayOrder(AccessoryDb.applyOrder(store.displayOrder(), db.inputs.map { it.identifier }))
             Iid.SPK_MUTE -> backend.isMuted()
             Iid.SPK_VOLUME_TYPE -> 3 // absoluta
             Iid.SPK_VOLUME -> backend.volume().coerceIn(0, 100)
-            else -> readInput(iid)
+            Iid.LABEL_NAMESPACE -> 1 // numerales arábigos
+            else -> readExtra(iid) ?: readInput(iid)
         }
+    }
+
+    private fun readExtra(iid: Int): Any? {
+        Button.entries.firstOrNull { iid == it.nameIid || iid == it.indexIid }?.let { b ->
+            return if (iid == b.nameIid) b.label else b.index
+        }
+        for (e in Extra.entries) {
+            when (iid) {
+                e.nameIid -> return e.label
+                e.configuredIid -> return store.name(e.slot) ?: e.label
+                e.brightnessIid -> return if (e == Extra.NIGHT) Mappings.brightness(backend.nightLightIntensity()) else null
+                e.onIid -> return when (e) {
+                    Extra.NIGHT -> backend.nightLightOn()
+                    Extra.MUSIC -> Mappings.musicOn(backend.lightMode())
+                    Extra.RHYTHM -> Mappings.rhythmOn(backend.lightMode())
+                    Extra.NOW_PLAYING -> backend.nowPlayingOpen()
+                    Extra.SAVER -> backend.screensaverOn()
+                }
+            }
+        }
+        return null
     }
 
     private fun readInput(iid: Int): Any? {
@@ -171,11 +245,16 @@ internal class TvController(
             }
             Iid.TV_REMOTE_KEY -> backend.remoteKey(n!!)
             Iid.TV_POWER_MODE -> backend.openSettings()
-            Iid.TV_DISPLAY_ORDER -> Unit // el orden lo fija Hogar; se acepta y se ignora
+            Iid.TV_DISPLAY_ORDER -> {
+                // El dueño reordena las entradas en Casa: se guarda (solo identificadores que existen).
+                val ids = AccessoryDb.parseDisplayOrder(v as String) ?: return HapStatus.INVALID_VALUE
+                store.setDisplayOrder(ids.filter { it in inputsById })
+            }
             Iid.SPK_MUTE -> backend.setMuted(v as Boolean)
             Iid.SPK_VOLUME -> backend.setVolume(n!!)
             Iid.SPK_VOLUME_SELECTOR -> backend.volumeStep(up = n == 0)
             else -> {
+                writeExtra(iid, v, n, now)?.let { return it }
                 val id = Iid.inputOf(iid) ?: return HapStatus.READ_ONLY
                 if (id !in inputsById) return HapStatus.NOT_FOUND
                 when (Iid.inputPart(iid)) {
@@ -189,10 +268,37 @@ internal class TvController(
         return HapStatus.OK
     }
 
+    /** Escribe en Luz nocturna e interruptores. null = no es una de ellas; si no, el código [HapStatus]. */
+    private fun writeExtra(iid: Int, v: Any, n: Int?, now: Long): Int? {
+        Extra.ofConfiguredName(iid)?.let { e ->
+            store.setName(e.slot, (v as String).trim().ifEmpty { e.label })
+            return HapStatus.OK
+        }
+        if (iid == Extra.NIGHT.brightnessIid) { backend.setNightLightIntensity(n!!); return HapStatus.OK }
+        val e = Extra.ofOn(iid) ?: return null
+        val on = v as Boolean
+        when (e) {
+            Extra.NIGHT -> backend.setNightLightOn(on)
+            Extra.MUSIC -> backend.setLightMode(Mappings.afterMusic(backend.lightMode(), on))
+            Extra.RHYTHM -> backend.setLightMode(Mappings.afterRhythm(backend.lightMode(), on))
+            Extra.NOW_PLAYING -> {
+                backend.setNowPlayingOpen(on)
+                holds[iid] = Hold(on, now + SHORT_HOLD_MS)
+            }
+            Extra.SAVER -> backend.setScreensaverOn(on)
+        }
+        // La luz musical y el ritmo comparten un ajuste: ambos cambian a la vez.
+        return HapStatus.OK
+    }
+
     /** Valor actual de las características con eventos. */
     private fun evented(): List<Int> = buildList {
         add(Iid.TV_CONFIGURED_NAME); add(Iid.TV_ACTIVE); add(Iid.TV_ACTIVE_ID); add(Iid.TV_DISPLAY_ORDER)
         add(Iid.SPK_MUTE); add(Iid.SPK_ACTIVE); add(Iid.SPK_VOLUME); add(Iid.SPK_VOLUME_TYPE); add(Iid.TV_SLEEP_DISCOVERY)
+        for (e in Extra.entries) {
+            add(e.onIid); add(e.configuredIid)
+            if (e == Extra.NIGHT) add(e.brightnessIid)
+        }
         for (i in db.inputs) {
             add(Iid.inputChar(i.identifier, Iid.INPUT_CONFIGURED_NAME))
             add(Iid.inputChar(i.identifier, Iid.INPUT_CURRENT_VISIBILITY))
@@ -220,5 +326,6 @@ internal class TvController(
     companion object {
         const val TV_NAME = "TV Daewoo"
         const val HOLD_MS = 6_000L
+        const val SHORT_HOLD_MS = 3_000L
     }
 }

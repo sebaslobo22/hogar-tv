@@ -68,8 +68,18 @@ class LightEngine private constructor(ctx: Context) {
         @Volatile var lost = false
     }
 
+    // HomeKit (y cualquier otro) puede cambiar el modo escribiendo en LightPrefs: el motor lo sigue.
+    // Debe quedar en un campo: SharedPreferences solo guarda una referencia débil al oyente.
+    private val modeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "mode") {
+            val m = prefs.mode
+            if (m != mode) { mode = m; gaveUp = false; notified = false; wake.trySend(Unit) }
+        }
+    }
+
     init {
         scope.launch { for (u in wake) reconcile() }
+        prefs.registerListener(modeListener)
     }
 
     // --- Ciclo de vida (hilo principal; lo llama MediaListener) ---

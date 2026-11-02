@@ -121,7 +121,15 @@ internal class HomeKitStore(private val kv: Kv, private val rnd: SecureRandom = 
     @Synchronized fun visibility(identifier: Int): Int = kv.get(P_VIS + identifier)?.toIntOrNull() ?: 0
     @Synchronized fun setVisibility(identifier: Int, v: Int) { kv.put(P_VIS + identifier, v.toString()) }
 
+    /** Orden de las entradas que fijó el dueño en Casa (identificadores), o vacío si no ha reordenado. */
+    @Synchronized
+    fun displayOrder(): List<Int> = kv.get(K_ORDER)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+
+    @Synchronized
+    fun setDisplayOrder(ids: List<Int>) { kv.put(K_ORDER, ids.joinToString(",")) }
+
     private companion object {
+        const val K_ORDER = "display_order"
         const val K_DEVICE = "device_id"
         const val K_SEED = "ltsk_seed"
         const val K_LTPK = "ltpk"

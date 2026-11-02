@@ -24,6 +24,22 @@ internal class FakeTv : TvBackend {
     override fun setMuted(muted: Boolean) { calls += "mute:$muted"; mutedNow = muted }
     override fun volumeStep(up: Boolean) { calls += if (up) "up" else "down" }
     override fun openSettings() { calls += "settings" }
+
+    var nightOn = false
+    var nightIntensity = 50
+    var light = 0
+    var nowPlaying = false
+    var saver = true
+    override fun nightLightOn() = nightOn
+    override fun setNightLightOn(on: Boolean) { calls += "night:$on"; nightOn = on }
+    override fun nightLightIntensity() = nightIntensity
+    override fun setNightLightIntensity(v: Int) { calls += "nightI:$v"; nightIntensity = v }
+    override fun lightMode() = light
+    override fun setLightMode(mode: Int) { calls += "light:$mode"; light = mode }
+    override fun nowPlayingOpen() = nowPlaying
+    override fun setNowPlayingOpen(open: Boolean) { calls += "np:$open" }
+    override fun screensaverOn() = saver
+    override fun setScreensaverOn(on: Boolean) { calls += "saver:$on"; saver = on }
 }
 
 internal val TEST_INPUTS = listOf(

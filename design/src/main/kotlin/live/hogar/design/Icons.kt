@@ -71,6 +71,7 @@ object HogarIcons {
         return sb.append("Z").toString()
     }
 
+    val Home by lazy { icon("home", P("M4 11.2 L12 4.6 L20 11.2"), P("M6.2 9.8 V19.4 H17.8 V9.8 Z")) }
     val Gear by lazy { icon("gear", P(gearPath()), P("M9.2 12 A2.8 2.8 0 1 0 14.8 12 A2.8 2.8 0 1 0 9.2 12 Z")) }
     val Audio by lazy {
         icon("audio", P(SPEAKER), P("M15.5 9.1 A4.2 4.2 0 0 1 15.5 14.9"), P("M18.2 6.4 A8 8 0 0 1 18.2 17.6"))

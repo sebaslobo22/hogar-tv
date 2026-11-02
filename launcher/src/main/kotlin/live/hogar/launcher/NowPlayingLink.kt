@@ -62,3 +62,14 @@ internal object AutoMode {
     /** ¿Toca abrir el salvapantallas? Solo en el inicio de Hogar, tras [IDLE_MS] sin pulsar nada. */
     fun due(nowMs: Long, lastKeyMs: Long, onHome: Boolean): Boolean = onHome && nowMs - lastKeyMs >= IDLE_MS
 }
+
+/** Puente con el módulo `homekit` por nombre de clase (el lanzador no depende de él). */
+internal object HomeKitLink {
+    const val ACTIVITY = "live.hogar.homekit.HomeKitActivity"
+
+    fun open(ctx: Context) {
+        val i = Intent().setClassName(ctx.packageName, ACTIVITY)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        runCatching { ctx.startActivity(i) }
+    }
+}

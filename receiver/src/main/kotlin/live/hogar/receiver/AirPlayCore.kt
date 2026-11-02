@@ -42,6 +42,8 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
     private var video: VideoCast? = null
     private var eventConn: Conn? = null
     private var volumeDb = -15f
+    private val media = AirPlayMedia(context)
+    private var deviceName: String? = null
 
     fun start() {
         val port = server.start()
@@ -61,6 +63,7 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
             session?.stopAll(); session = null
             video?.stop(); video = null
         }
+        media.end()
         ScreenHub.finishScreen()
     }
 
@@ -68,7 +71,7 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
         synchronized(lock) {
             if (eventConn === conn) eventConn = null
             val s = session
-            if (s != null && s.owner === conn && s.mirror == null && s.audio == null) { s.stopAll(); session = null }
+            if (s != null && s.owner === conn && s.mirror == null && s.audio == null) { s.stopAll(); session = null; media.end() }
         }
     }
 
@@ -84,8 +87,8 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
             m == "POST" && p == "/fp-setup" -> fpSetup(conn, req)
             m == "OPTIONS" -> Response().also { it.headers["Public"] = "SETUP, RECORD, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, POST, GET" }
             m == "SETUP" -> setup(conn, req)
-            m == "RECORD" -> Response().also { it.headers["Audio-Latency"] = "11025"; it.headers["Audio-Jack-Status"] = "connected; type=analog" }
-            m == "FLUSH" -> { session?.audio?.flush(); Response() }
+            m == "RECORD" -> { media.setPlaying(true); Response().also { it.headers["Audio-Latency"] = "11025"; it.headers["Audio-Jack-Status"] = "connected; type=analog" } }
+            m == "FLUSH" -> { session?.audio?.flush(); media.setPlaying(false); Response() }
             m == "TEARDOWN" -> teardown(req)
             m == "GET_PARAMETER" -> getParameter(req)
             m == "SET_PARAMETER" -> setParameter(req)
@@ -225,6 +228,7 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
                 res["timingPort"] = timing.port.toLong()
             }
             res["eventPort"] = 0L
+            deviceName = root["name"] as? String
             Log.i("sesion nueva desde ${conn.remoteAddress.hostAddress} (${root["name"] ?: "?"}, ${root["model"] ?: "?"})")
         }
         val streams = root["streams"] as? List<*>
@@ -251,6 +255,7 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
                             val ar = AudioReceiver(s.aesKey, s.aesIv, ct, spf)
                             ar.setVolumeDb(volumeDb)
                             s.audio = ar
+                            if (ct != 8) media.begin(deviceName) // 8 = audio del espejo, no es musica
                             out.add(mapOf("dataPort" to ar.dataPort.toLong(), "controlPort" to ar.controlPort.toLong(), "type" to 96L))
                         }
                     }
@@ -282,9 +287,9 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
         synchronized(lock) {
             val s = session
             when {
-                t96 && !t110 -> { s?.audio?.stop(); s?.audio = null }
+                t96 && !t110 -> { s?.audio?.stop(); s?.audio = null; media.end() }
                 t110 && !t96 -> { s?.mirror?.stop(); s?.mirror = null; ScreenHub.finishScreen() }
-                else -> { s?.stopAll(); session = null; video?.stop(); video = null; ScreenHub.finishScreen() }
+                else -> { s?.stopAll(); session = null; video?.stop(); video = null; ScreenHub.finishScreen(); media.end() }
             }
         }
         return Response(close = true).also { it.headers["Connection"] = "close" }
@@ -310,9 +315,15 @@ internal class AirPlayCore(private val context: Context) : RequestHandler {
                     volumeDb = v
                     session?.audio?.setVolumeDb(v)
                     video?.setVolumeDb(v)
+                    media.setVolumeDb(v)
                 }
             }
-        } // artwork (image/jpeg) y metadatos (dmap) se ignoran
+            AirPlayMeta.parseProgress(text)?.let { media.setProgress(it) }
+        } else if (ct.startsWith("application/x-dmap-tagged")) {
+            media.setDmap(AirPlayMeta.parseDmap(req.body))
+        } else if (ct.startsWith("image/jpeg") || ct.startsWith("image/png")) {
+            media.setArtwork(req.body)
+        }
         return Response()
     }
 

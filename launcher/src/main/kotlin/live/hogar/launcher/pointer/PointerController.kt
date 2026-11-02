@@ -63,6 +63,26 @@ internal class PointerController(
 
     private val isActive: Boolean get() = appEnabled && !keyboardVisible
 
+    /** App en primer plano según el puntero (ya filtrada de capas y teclado). */
+    val currentPackage: String? get() = currentPkg
+
+    /**
+     * Pulsa una tecla del mando por software (HomeKit): flechas mueven el puntero y CENTER hace clic.
+     * Devuelve false si el modo puntero no está activo en la app de turno.
+     */
+    fun inject(keyCode: Int): Boolean {
+        if (!isActive) return false
+        main.post {
+            val t = SystemClock.uptimeMillis()
+            onKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, keyCode, 0))
+            main.postDelayed({
+                val t2 = SystemClock.uptimeMillis()
+                onKeyEvent(KeyEvent(t, t2, KeyEvent.ACTION_UP, keyCode, 0))
+            }, if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) 60L else 140L)
+        }
+        return true
+    }
+
     // ---------------------------------------------------------------- eventos de ventanas
 
     fun onForeground(hint: String) {

@@ -105,7 +105,7 @@ import live.hogar.design.HogarIcon
 import live.hogar.design.HogarIcons
 import live.hogar.design.HogarRoot
 import live.hogar.design.HogarText
-import live.hogar.nowplaying.light.LightSync
+import live.hogar.nowplaying.light.LightEngine
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -119,7 +119,7 @@ internal fun NowPlayingScreen(
     tracker: MediaTracker,
     lyrics: LyricsRepository,
     engine: MeshEngine,
-    light: LightSync,
+    light: LightEngine,
     granted: Boolean,
     autoMode: Int,
     autoLaunched: Boolean,
@@ -138,7 +138,7 @@ internal fun NowPlayingScreen(
     LaunchedEffect(art, targetPx) {
         prepared = withContext(Dispatchers.Default) { ArtworkRender.prepare(art, targetPx) }
     }
-    LaunchedEffect(prepared) { prepared?.let { engine.setColors(it.mesh); light.setPalette(it.mesh) } }
+    LaunchedEffect(prepared) { prepared?.let { engine.setColors(it.mesh) } }
 
     // Posición para barra y reloj: se extrapola 4 veces por segundo, solo mientras suena.
     val positionMs = remember { mutableLongStateOf(0L) }
@@ -360,7 +360,7 @@ private fun Content(
     autoMode: Int,
     plan: NpFocus,
     canFocusChrome: () -> Boolean,
-    light: LightSync,
+    light: LightEngine,
     chromeAlpha: () -> Float,
     shuffleOn: Boolean,
     repeatMode: Int,
@@ -635,7 +635,7 @@ private fun Chrome(
     plan: NpFocus,
     canFocus: () -> Boolean,
     tracker: MediaTracker,
-    light: LightSync,
+    light: LightEngine,
     onToggleLyrics: () -> Unit,
     onToggleQueue: () -> Unit,
     onAirPlay: () -> Unit,
@@ -671,7 +671,7 @@ private fun Transport(playing: Boolean, plan: NpFocus, canFocus: () -> Boolean, 
 
 @Composable
 private fun SmallButtons(
-    showLyrics: Boolean, queueOpen: Boolean, light: LightSync, plan: NpFocus, canFocus: () -> Boolean,
+    showLyrics: Boolean, queueOpen: Boolean, light: LightEngine, plan: NpFocus, canFocus: () -> Boolean,
     onLyrics: () -> Unit, onQueue: () -> Unit, onAirPlay: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -682,9 +682,9 @@ private fun SmallButtons(
     }
 }
 
-/** Iluminación Govee. Pulsar: Apagado → Paleta → Paleta + ritmo. Mantener pulsado: "Segmentos (experimental)". */
+/** Iluminación Govee. Pulsar: Apagado → Paleta → Paleta + ritmo. Mantener pulsado: "Prueba de tramos" (arcoíris 4 s; repetir cambia de método). */
 @Composable
-private fun LightButton(light: LightSync, node: Modifier) {
+private fun LightButton(light: LightEngine, node: Modifier) {
     val suppressClick = remember { booleanArrayOf(false) }
     GlassIconButton(
         NpIcons.Lamp,
@@ -693,7 +693,7 @@ private fun LightButton(light: LightSync, node: Modifier) {
             val k = e.key
             val center = k == Key.DirectionCenter || k == Key.Enter || k == Key.NumPadEnter
             if (center && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount >= 1) {
-                if (e.nativeKeyEvent.repeatCount == 1) { suppressClick[0] = true; light.toggleSegments() }
+                if (e.nativeKeyEvent.repeatCount == 1) { suppressClick[0] = true; light.testSegments() }
                 true
             } else false
         },

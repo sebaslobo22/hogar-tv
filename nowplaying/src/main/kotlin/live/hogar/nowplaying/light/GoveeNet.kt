@@ -100,6 +100,7 @@ internal class GoveeSession(ctx: Context, scope: CoroutineScope, val ip: String)
 
     fun send(json: String) {
         val b = json.toByteArray()
+        android.util.Log.i("HogarLamp", "-> $ip:${GoveeProtocol.CONTROL_PORT} $json")
         runCatching { socket.send(DatagramPacket(b, b.size, target, GoveeProtocol.CONTROL_PORT)) }
     }
 

@@ -59,6 +59,7 @@ dependencies {
     implementation(project(":receiver"))
     implementation(project(":browser"))
     implementation(project(":nowplaying"))
+    implementation(project(":homekit"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)

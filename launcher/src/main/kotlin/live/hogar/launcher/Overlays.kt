@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -320,7 +322,10 @@ internal fun ControlCenterHost(
                     },
                 shape = RoundedCornerShape(Hogar.Radius.Panel),
             ) {
-                Column(Modifier.padding(Hogar.Space.M), verticalArrangement = Arrangement.spacedBy(Hogar.Space.Xs)) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(Hogar.Space.M),
+                    verticalArrangement = Arrangement.spacedBy(Hogar.Space.Xs),
+                ) {
                     HogarText(time, Hogar.Type.Title.copy(fontSize = 40.sp))
                     HogarText(date, Hogar.Type.Caption, Modifier.padding(bottom = Hogar.Space.S))
 
@@ -353,6 +358,7 @@ internal fun ControlCenterHost(
                     GlassButton("Reproduciendo ahora", { close { NowPlayingLink.open(ctx) } }, full, HogarIcons.Music, shape)
                     NightLightRow(serviceOn, onOpenPanel = { close { state.nightOpen = true } }, modifier = full)
                     GlassButton("Este TV", { close(onSpecs) }, full, HogarIcons.Tv, shape)
+                    GlassButton("HomeKit", { close { HomeKitLink.open(ctx) } }, full, HogarIcons.Home, shape)
                     GlassButton(
                         "Mostrar ocultas", onToggleHidden, full,
                         if (showHidden) HogarIcons.Eye else HogarIcons.EyeSlash, shape,

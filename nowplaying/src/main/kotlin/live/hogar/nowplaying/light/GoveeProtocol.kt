@@ -27,6 +27,13 @@ object GoveeProtocol {
     fun razer(packet: ByteArray) =
         """{"msg":{"cmd":"razer","data":{"pt":"${Base64.getEncoder().encodeToString(packet)}"}}}"""
 
+    /**
+     * "ptReal": paquetes BLE de 20 bytes tunelados por LAN (base64 en `data.command`). Mismo mecanismo que
+     * usan la app de Govee y proyectos como govee-ble-lights / wez/govee-py (`33 05 15 01 r g b … máscara`).
+     */
+    fun ptReal(packets: List<ByteArray>) =
+        """{"msg":{"cmd":"ptReal","data":{"command":[${packets.joinToString(",") { "\"" + Base64.getEncoder().encodeToString(it) + "\"" }}]}}}"""
+
     fun parseScan(json: String): LampInfo? {
         val root = MiniJson.parse(json)
         if (MiniJson.get(root, "msg", "cmd") != "scan") return null
@@ -70,16 +77,48 @@ object Razer {
     fun enable() = withChecksum(intArrayOf(0xBB, 0x00, 0x01, 0xB1, 0x01))
     fun disable() = withChecksum(intArrayOf(0xBB, 0x00, 0x01, 0xB1, 0x00))
 
-    /** Un color por segmento; [rgb] = 0xRRGGBB. */
-    fun segments(rgb: IntArray): ByteArray {
+    /**
+     * Un color por segmento; [rgb] = 0xRRGGBB. [gradient] = 1 → la lámpara interpola entre los N colores
+     * (modo "Degradado"); 0 → N tramos de color plano. Formato `BB 00 LEN B0 <flag> N r g b… xor`, tal como
+     * lo describe el volcado de OpenRGB para Govee (merge request 2172: cabecera BB 00, tamaño, comando B0 =
+     * datos de LED con indicador de degradado, xor de todo lo anterior). El tamaño exacto no está
+     * documentado por Govee: por eso el método es seleccionable y hay "Prueba de tramos".
+     */
+    fun segments(rgb: IntArray, gradient: Boolean = true): ByteArray {
         val n = rgb.size
         val body = IntArray(6 + 3 * n)
-        body[0] = 0xBB; body[1] = 0x00; body[2] = 2 + 3 * n; body[3] = 0xB0; body[4] = 0x01; body[5] = n
+        body[0] = 0xBB; body[1] = 0x00; body[2] = 2 + 3 * n; body[3] = 0xB0; body[4] = if (gradient) 0x01 else 0x00; body[5] = n
         for (i in 0 until n) {
             body[6 + 3 * i] = (rgb[i] shr 16) and 0xFF
             body[7 + 3 * i] = (rgb[i] shr 8) and 0xFF
             body[8 + 3 * i] = rgb[i] and 0xFF
         }
         return withChecksum(body)
+    }
+}
+
+/**
+ * Paquetes BLE de 20 bytes (byte 20 = xor de los 19 anteriores) para ptReal.
+ * Color por segmentos: `33 05 15 01 R G B 00 00 00 00 00 mLo mHi 00 00 00 00 00 xor`; la máscara de 16 bits
+ * (bit i = segmento i; 0x7FFF = los 15 de las lámparas H60xx) elige a qué tramos aplica el color.
+ */
+object PtReal {
+    const val SEGMENTS = 15
+
+    fun frame(vararg head: Int): ByteArray {
+        val b = ByteArray(20)
+        for (i in head.indices) b[i] = head[i].toByte()
+        b[19] = Razer.xor(b, 19)
+        return b
+    }
+
+    fun segmentColor(r: Int, g: Int, b: Int, mask: Int): ByteArray =
+        frame(0x33, 0x05, 0x15, 0x01, r and 0xFF, g and 0xFF, b and 0xFF, 0, 0, 0, 0, 0, mask and 0xFF, (mask shr 8) and 0xFF)
+
+    /** Un paquete por color distinto (los segmentos con el mismo color comparten máscara). */
+    fun packets(rgb: IntArray): List<ByteArray> {
+        val groups = LinkedHashMap<Int, Int>()
+        for (i in rgb.indices) groups[rgb[i]] = (groups[rgb[i]] ?: 0) or (1 shl i)
+        return groups.map { (c, mask) -> segmentColor((c shr 16) and 0xFF, (c shr 8) and 0xFF, c and 0xFF, mask) }
     }
 }

@@ -8,9 +8,14 @@ import android.service.notification.NotificationListenerService
 /**
  * Servicio vacío a propósito: tener un NotificationListenerService habilitado es lo que permite
  * a `MediaSessionManager.getActiveSessions(componente)` ver las sesiones de otras apps.
- * No lee ni guarda notificaciones.
+ * No lee ni guarda notificaciones. Es además el dueño del motor de iluminación [live.hogar.nowplaying.light.LightEngine].
  */
-class MediaListener : NotificationListenerService()
+class MediaListener : NotificationListenerService() {
+    // El motor de la lámpara vive mientras este servicio esté conectado (acceso a notificaciones concedido).
+    override fun onListenerConnected() { live.hogar.nowplaying.light.LightEngine.get(this).attach() }
+    override fun onListenerDisconnected() { live.hogar.nowplaying.light.LightEngine.get(this).detach() }
+    override fun onDestroy() { live.hogar.nowplaying.light.LightEngine.get(this).detach(); super.onDestroy() }
+}
 
 object ListenerAccess {
     fun component(ctx: Context) = ComponentName(ctx, MediaListener::class.java)

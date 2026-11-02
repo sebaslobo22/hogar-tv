@@ -15,7 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import live.hogar.nowplaying.light.LightSync
+import live.hogar.nowplaying.light.LightEngine
 
 /**
  * "Reproduciendo ahora" a pantalla completa para lo que suene en el TV. Se abre desde el
@@ -32,8 +32,8 @@ class NowPlayingActivity : ComponentActivity() {
     private val engine = MeshEngine(audioAllowed = {
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     })
-    // Iluminación Govee: lee energía y pulso del motor del fondo; restaura la lámpara al salir.
-    private val light by lazy { LightSync(this, energy = { engine.energy }, swell = { engine.swell }) }
+    // Iluminación Govee: motor de vida larga (lo posee MediaListener); aquí solo se controla.
+    private val light by lazy { LightEngine.get(this) }
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* el motor reintenta solo */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,18 +72,16 @@ class NowPlayingActivity : ComponentActivity() {
         granted.value = ListenerAccess.isGranted(this)
         tracker.start()
         engine.start(scope)
-        light.onStart()
+        if (granted.value) light.attach()
     }
 
     override fun onStop() {
-        light.onStop()
         engine.stop()
         tracker.stop()
         super.onStop()
     }
 
     override fun onDestroy() {
-        light.release()
         scope.cancel()
         super.onDestroy()
     }

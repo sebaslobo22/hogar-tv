@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "Hogar"
-include(":app", ":core", ":design", ":launcher", ":specs", ":airplay", ":player", ":receiver", ":browser", ":nowplaying")
+include(":app", ":core", ":design", ":launcher", ":specs", ":airplay", ":player", ":receiver", ":browser", ":nowplaying", ":homekit")

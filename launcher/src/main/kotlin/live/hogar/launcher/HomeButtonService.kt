@@ -7,6 +7,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import live.hogar.core.TvPower
 import live.hogar.launcher.nightlight.NightLightController
 import live.hogar.launcher.pointer.PointerController
 
@@ -45,6 +46,23 @@ class HomeButtonService : AccessibilityService() {
         lastKeyMs = SystemClock.uptimeMillis()
         main.removeCallbacks(idleCheck)
         main.postDelayed(idleCheck, IDLE_CHECK_MS)
+        instance = this
+        installTvHooks()
+    }
+
+    /** Ganchos para HomeKit (módulo `homekit`, que no depende del lanzador): ver [TvPower]. */
+    private fun installTvHooks() {
+        TvPower.sleeper = { sleepTv() }
+        TvPower.homer = { openHogar(); true }
+        TvPower.backer = { performGlobalAction(GLOBAL_ACTION_BACK) }
+        TvPower.pointerKey = { code -> pointer?.inject(code) ?: false }
+        TvPower.starter = { intent -> runCatching { startActivity(intent); true }.getOrDefault(false) }
+    }
+
+    private fun removeTvHooks() {
+        if (instance === this) instance = null
+        TvPower.sleeper = null; TvPower.homer = null; TvPower.backer = null
+        TvPower.pointerKey = null; TvPower.starter = null
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -92,6 +110,7 @@ class HomeButtonService : AccessibilityService() {
                 trackHome(pkg, event.className?.toString())
                 if (pkg in STOCK_LAUNCHERS) openHogar()
                 pointer?.onForeground(pkg)
+                TvPower.reportForeground(pointer?.currentPackage ?: pkg)
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> pointer?.onWindowsChanged()
         }
@@ -109,6 +128,7 @@ class HomeButtonService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        removeTvHooks()
         main.removeCallbacks(idleCheck)
         pointer?.release()
         pointer = null
@@ -118,6 +138,7 @@ class HomeButtonService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        removeTvHooks()
         main.removeCallbacks(idleCheck)
         pointer?.release()
         pointer = null
@@ -133,9 +154,18 @@ class HomeButtonService : AccessibilityService() {
         startActivity(intent)
     }
 
-    private companion object {
-        const val IDLE_CHECK_MS = 20_000L
-        val STOCK_LAUNCHERS = setOf(
+    companion object {
+        @Volatile private var instance: HomeButtonService? = null
+
+        /**
+         * Apaga la pantalla del TV. En Android TV, `GLOBAL_ACTION_LOCK_SCREEN` (API 28) hace
+         * `PowerManager.goToSleep` además de bloquear. Devuelve false si el servicio no está activo.
+         */
+        @JvmStatic
+        fun sleepTv(): Boolean = instance?.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) ?: false
+
+        private const val IDLE_CHECK_MS = 20_000L
+        private val STOCK_LAUNCHERS = setOf(
             "com.google.android.apps.tv.launcherx",
             "com.google.android.tvlauncher",
             "com.google.android.leanbacklauncher",

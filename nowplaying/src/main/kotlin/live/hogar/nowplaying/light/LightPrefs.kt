@@ -11,9 +11,9 @@ class LightPrefs(ctx: Context) {
         get() = sp.getInt("mode", MODE_OFF).coerceIn(0, 2)
         set(v) { sp.edit().putInt("mode", v).apply() }
 
-    var segments: Boolean
-        get() = sp.getBoolean("segments", false)
-        set(v) { sp.edit().putBoolean("segments", v).apply() }
+    /** Método de envío por dispositivo (por defecto "Degradado"). */
+    fun method(device: String?): LightMethod = LightMethod.parse(sp.getString("method_" + (device ?: ""), null))
+    fun setMethod(device: String?, m: LightMethod) { sp.edit().putString("method_" + (device ?: ""), m.name).apply() }
 
     var lamp: LampInfo?
         get() {

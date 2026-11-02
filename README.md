@@ -40,6 +40,11 @@ No hace falta root ni tocar el firmware. Se instala como cualquier app y se desi
   atardecer al amanecer calculado en el propio TV (Caracas por defecto, se elige la ciudad).
 - **Iluminación sincronizada** con lámparas Govee por la red local (API LAN): la lámpara toma la paleta
   de la carátula y, si quieres, late con el ritmo.
+- **HomeKit y Siri**: Hogar se presenta en la app Casa como un accesorio "Televisión". Desde iPhone,
+  iPad, Mac, Apple Watch o HomePod: "Oye Siri, apaga el televisor", "pon Netflix en el televisor",
+  volumen, control remoto del Centro de control y automatizaciones de Casa junto al resto de la casa.
+  Se empareja con el código o el QR que muestra Hogar (Centro de control → HomeKit). Encender por Siri
+  funciona si el TV mantiene la red en reposo (muchos Google TV lo hacen con el "reposo rápido").
 - **Control remoto aprovechado**: Inicio, ⚙️/👤 abren el Centro de control y 📺 abre Reproduciendo ahora.
 - **Tipografía**: usa San Francisco si la pones en `fonts-local/` (uso personal; su licencia no permite
   redistribuirla) y si no, Inter, incluida en el repositorio.
@@ -51,6 +56,7 @@ Esto lo comprobamos con evidencia antes de rendirnos. Si encuentras una vía, ab
 | Deseo | Estado | Motivo |
 |---|---|---|
 | Interfaz a 4K nativo | ❌ en la mayoría de los TV | Muchos chips (MStar/MediaTek) dan a las apps una capa gráfica de 1080p; el video sí va en 4K. *Este TV* te dice cuál es tu caso. A 2,6 m de un TV de 65" un píxel 1080p ya no se distingue. |
+| El TV como "televisor Matter" en Casa | ❌ | La app Casa no muestra televisores Matter como televisor; por eso Hogar usa HomeKit directo. |
 | Multiroom de AirPlay 2 desde el iPhone (agrupar el TV con HomePods) | ❌ sin root | Requiere el reloj PTP en los puertos UDP 319/320 y Android no deja a las apps usar puertos < 1024. Por eso existe el "puente". |
 | Dolby Atmos por AirPlay | ❌ | Apple solo envía Atmos por AirPlay a sus equipos (Apple TV, HomePod). |
 | Dolby Atmos con Apple Music en el TV | ⚠️ depende del TV | Apple Music solo muestra Atmos en equipos certificados; además hace falta una barra Atmos por HDMI ARC. |
@@ -105,6 +111,7 @@ JDK 17. El APK queda en `app/build/outputs/apk/release/`.
 | `player` | Reproductor sin pérdida, captura del sonido del TV y puente multiroom. |
 | `browser` | Navegador para control remoto. |
 | `nowplaying` | Reproduciendo ahora, letra sincronizada, cola e iluminación Govee. |
+| `homekit` | Servidor HomeKit (HAP sobre IP) propio: accesorio Televisión con entradas por app y volumen. |
 | `core` | Contratos compartidos de audio. |
 
 Rendimiento: las decisiones se midieron en un TV real de 4 núcleos y 1,8 GB (MStar m7332): fundidos

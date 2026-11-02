@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="browser_app_name">Navegador</string>
+    <string name="addr_hint">Buscar o escribir una dirección</string>
+    <string name="start_title">Navegador</string>
+    <string name="start_favorites">Favoritos</string>
+    <string name="start_recent">Recientes</string>
+    <string name="tb_back">Atrás</string>
+    <string name="tb_forward">Adelante</string>
+    <string name="tb_reload">Recargar</string>
+    <string name="tb_stop">Detener</string>
+    <string name="tb_tabs">Pestañas</string>
+    <string name="tb_fav_add">Añadir a favoritos</string>
+    <string name="tb_fav_remove">Quitar de favoritos</string>
+    <string name="tb_desktop">Versión de escritorio</string>
+    <string name="tb_mobile">Versión móvil</string>
+    <string name="tb_zoom_less">Texto más pequeño</string>
+    <string name="tb_zoom_more">Texto más grande</string>
+    <string name="tb_scroll_mode">Desplazamiento</string>
+    <string name="tb_pointer_mode">Puntero</string>
+    <string name="tb_home">Inicio</string>
+    <string name="zoom_value">%1$d%%</string>
+    <string name="tabs_title">Pestañas abiertas</string>
+    <string name="tabs_new">Nueva pestaña</string>
+    <string name="tabs_close">Cerrar</string>
+    <string name="tabs_blank">Inicio</string>
+    <string name="tabs_max">Máximo %1$d pestañas abiertas</string>
+    <string name="ctx_new_tab">Abrir en pestaña nueva</string>
+    <string name="ctx_back">Volver</string>
+    <string name="ctx_reload">Recargar</string>
+    <string name="err_title">No se pudo abrir la página</string>
+    <string name="err_net">Revisa tu conexión a Internet e inténtalo de nuevo.</string>
+    <string name="err_ssl">La conexión con este sitio no es segura. Por tu protección se bloqueó la página.</string>
+    <string name="err_crash">La página se cerró porque el televisor se quedó sin memoria. Puedes volver a abrirla.</string>
+    <string name="err_retry">Reintentar</string>
+    <string name="err_home">Ir al inicio</string>
+    <string name="dl_started">Descargando %1$s…</string>
+    <string name="dl_failed">No se pudo iniciar la descarga</string>
+    <string name="ptr_mode_on">Modo puntero</string>
+    <string name="scroll_mode_on">Modo desplazamiento: arriba y abajo desplazan, izquierda y derecha cambian de página</string>
+</resources>

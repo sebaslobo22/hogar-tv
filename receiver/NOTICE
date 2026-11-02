@@ -1,0 +1,27 @@
+Receptor AirPlay de Hogar (modulo :receiver)
+=============================================
+
+Este modulo es un port a Kotlin de logica de receptores AirPlay de codigo abierto. Por eso se distribuye
+bajo los terminos de la GPL-3.0 (uso personal en el TV de la casa; no redistribuir sin publicar el codigo).
+
+Origen del codigo portado
+-------------------------
+* UxPlay (https://github.com/FDH2/UxPlay), GPL-3.0, y RPiPlay (https://github.com/FD-/RPiPlay), GPL-3.0:
+  - lib/raop_handlers.h, http_handlers.h  -> fairplay/FairPlay.kt, AirPlayCore.kt (SETUP, /info, /play, /playback-info...)
+  - lib/pairing.c                         -> crypto/Pairing.kt (pair-setup / pair-verify legacy)
+  - lib/mirror_buffer.c, raop_rtp_mirror.c-> mirror/MirrorReceiver.kt (AES-CTR del video, cabeceras de 128 bytes)
+  - lib/raop_buffer.c, raop_rtp.c         -> audio/AudioReceiver.kt (AES-CBC por paquete, reordenamiento)
+  - lib/raop_ntp.c                        -> net/TimingServer.kt
+  - lib/dnssdint.h                        -> Advertisement.kt (campos TXT, bits de "features")
+* playfair (FairPlay SAP v2.5, Jean-Francois Pelletier / hax; incluido en UxPlay y RPiPlay, GPL-3.0):
+  - fairplay/PlayFair.kt es port de playfair.c, omg_hax.c, modified_md5.c y sap_hash.c.
+  - fairplay/Garble.kt se GENERO transpilando hand_garble.c (tools/garble.py).
+  - fairplay/FairPlayTables.kt se GENERO extrayendo las tablas constantes de omg_hax.c/.h, sap_hash.c y
+    fairplay_playfair.c (tools/extract.py). No editar a mano.
+  - La prueba PlayFairTest compara con la salida de la implementacion en C compilada (tools/pf_main.c).
+* Apple Lossless (ALAC) de Apple, licencia Apache 2.0 (https://github.com/macosforge/alac):
+  - audio/AlacDecoder.kt es port de ALACDecoder.cpp, ag_dec.c, dp_dec.c y matrix_dec.c (solo 16 bits).
+* X25519 y Ed25519 se implementan con BigInteger segun RFC 7748 y RFC 8032 (sin dependencias).
+
+El protocolo AirPlay no es publico; la documentacion consultada es la de los proyectos anteriores y la
+documentacion no oficial (openairplay / "AirPlay 2 internals").

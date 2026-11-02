@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_button_service_label">Hogar: botón Inicio</string>
+    <string name="home_button_service_description">Hace que el botón Inicio del control abra Hogar en vez de la pantalla de Google TV. También ofrece un puntero en pantalla, movido con las flechas del control, para usar apps pensadas solo para pantalla táctil. Con la luz nocturna, dibuja un velo cálido sobre toda la pantalla para descansar la vista. Solo mira qué app está delante y si hay teclado; no lee textos ni datos.</string>
+    <string name="pointer_toast_on">Puntero activado · mantén OK 1,5 s para cambiar</string>
+    <string name="pointer_toast_off">Puntero desactivado · mantén OK 1,5 s para cambiar</string>
+</resources>

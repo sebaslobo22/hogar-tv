@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Banner 320×180 de Android TV: brújula blanca sobre degradado azul. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="320dp" android:height="180dp" />
+            <gradient android:angle="315" android:startColor="#FF4FB0FF" android:endColor="#FF0A4FD6" />
+        </shape>
+    </item>
+    <item android:gravity="center" android:width="96dp" android:height="96dp">
+        <vector android:width="96dp" android:height="96dp" android:viewportWidth="24" android:viewportHeight="24">
+            <path
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="1.6"
+                android:pathData="M3.5,12a8.5,8.5 0 1,0 17,0a8.5,8.5 0 1,0 -17,0z" />
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M15.9,8.1L13.6,13.6L8.1,15.9L10.4,10.4Z" />
+            <path
+                android:fillColor="#66FFFFFF"
+                android:pathData="M12,3.4L12,5M12,19L12,20.6M3.4,12L5,12M19,12L20.6,12" />
+        </vector>
+    </item>
+</layer-list>

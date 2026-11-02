@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Banner 320×180 de Android TV: casa blanca sobre degradado oscuro. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <size android:width="320dp" android:height="180dp" />
+            <gradient android:angle="270" android:startColor="#FF2C2C34" android:endColor="#FF0B0B0F" />
+        </shape>
+    </item>
+    <item android:gravity="center" android:width="72dp" android:height="72dp">
+        <vector android:width="72dp" android:height="72dp" android:viewportWidth="24" android:viewportHeight="24">
+            <path android:fillColor="#FFF5F5F7" android:pathData="M12,3L2,12h3v8h5v-6h4v6h5v-8h3z" />
+        </vector>
+    </item>
+</layer-list>

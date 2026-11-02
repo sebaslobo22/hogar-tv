@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Visualizer sobre la mezcla global: solo mide energía para animar el fondo; no graba ni guarda audio. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Lámpara Govee por LAN (UDP): descubrimiento por multidifusión y control en la red local. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <application>
+        <!-- Permite leer las sesiones de medios activas (Apple Music, Spotify...). Se concede con
+             `adb shell cmd notification allow_listener live.hogar/live.hogar.nowplaying.MediaListener`
+             o desde Ajustes > Acceso a notificaciones. No lee notificaciones. -->
+        <service
+            android:name="live.hogar.nowplaying.MediaListener"
+            android:exported="true"
+            android:label="@string/nowplaying_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Pantalla completa "Reproduciendo ahora". Sin icono de lanzador: la abre Hogar. -->
+        <activity
+            android:name="live.hogar.nowplaying.NowPlayingActivity"
+            android:exported="false"
+            android:label="@string/nowplaying_title"
+            android:launchMode="singleTop"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" />
+    </application>
+</manifest>

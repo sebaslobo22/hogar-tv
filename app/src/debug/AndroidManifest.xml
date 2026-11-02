@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo en la versión de pruebas: dispara la prueba de AirPlay desde adb. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver android:name=".DebugSelfTestReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="live.hogar.DEBUG_SELFTEST" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
